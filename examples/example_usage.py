@@ -88,10 +88,8 @@ if __name__ == "__main__":
 
     print("\nMethod\t\tCorrelation\tMAE")
     print("-" * 40)
-    print(f"CPM\t\tr={cpm_r:.3f}\t\t{mean_absolute_error(
-        behavioral_measures, cpm_predictions):.3f}")
-    print(f"PNRS\t\tr={pnrs_r:.3f}\t\t{mean_absolute_error(
-        behavioral_measures, pnrs_predictions):.3f}")
+    print(f"CPM\t\tr={cpm_r:.3f}\t\t{mean_absolute_error(behavioral_measures, cpm_predictions):.3f}")
+    print(f"PNRS\t\tr={pnrs_r:.3f}\t\t{mean_absolute_error(behavioral_measures, pnrs_predictions):.3f}")
 
     # Plot results
     plot_results(cpm_predictions, behavioral_measures, title="CPM")
