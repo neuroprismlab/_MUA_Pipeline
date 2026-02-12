@@ -1,4 +1,6 @@
 # A Configurable Pipeline for Mass Univariate Aggregation (MUA) Methods
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 1. A Configurable Pipeline for Mass Univariate Aggregation Methods
 
@@ -82,7 +84,7 @@ The_pipeline = Pipeline([
 
 ## 5. Tutorial: Getting Started
 
-See examples/ directory for specific examples of using the MUA pipeline.
+See [examples](examples/) directory for specific examples of using the MUA pipeline.
 
 ### 5.1 Importing the Pipeline Components
 
@@ -93,10 +95,6 @@ from mua_pipeline import FeatureVectorizer, MUA, preprocess, plot_results
 ### 5.2 Preprocessing Your Data
 Before building a pipeline, you can use the **Preprocessing** module to handle data formatting and missing data removal. The `preprocess` function automatically detects the orientation of your data and converts it to the standard format expected by the pipeline:
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 98f6555 (updates to readme and small changes)
 * **3D connectivity matrices** are converted to `(n_subjects, n_regions, n_regions)` regardless of whether the input is `(n_regions, n_regions, n_subjects)`, `(n_regions, n_subjects, n_regions)`, or already in the standard format.
 * **2D feature matrices** are converted to `(n_subjects, n_features)` even if provided as `(n_features, n_subjects)`.
 * **Behavioral data** is similarly standardized.
