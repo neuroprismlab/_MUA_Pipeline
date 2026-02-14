@@ -4,7 +4,7 @@
 
 ## 1. A Configurable Pipeline for Mass Univariate Aggregation Methods
 
-We present a unified, flexible, and accessible configurable pipeline that can be used for implementing CPM (Shen et al., 2017), PNRS (Byington et al., 2023), and many new MUA configurations facilitated by user-specified parameters. The pipeline’s core is built around two classes—**FeatureVectorizer** and **MUA**—both of which are engineered to be fully compatible with the scikit-learn ecosystem.
+We present a unified, flexible, and accessible configurable pipeline that can be used for implementing CPM (Shen et al., 2017), PNRS (Byington et al., 2023), and many new MUA configurations facilitated by user-specified parameters. The pipeline's core is built around two classes—**FeatureVectorizer** and **MUA**—both of which are engineered to be fully compatible with the scikit-learn ecosystem.
 
 ## 2. Installation
 
@@ -45,18 +45,22 @@ The MUA class is our main Python class that extends scikit-learn's BaseEstimator
 3. **Feature Aggregation:** Defines how weighted features are combined into predictive scores (e.g., sum or mean aggregation)
 
 ### 4.2.1 MUA Class's Parameters
-The MUA class employs seven configurable parameters organized across the three computational steps described above that enable flexible implementation of established methods while facilitating exploration of novel approaches.
+The MUA class employs eight configurable parameters organized across the three computational steps described above that enable flexible implementation of established methods while facilitating exploration of novel approaches.
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
-| **split_by_sign** | `True` | Separate positive/negative features |
-| | `False` | Keep all features together |
+| **filter_by_sign** | `True` | Separate positive/negative features (CPM-style) |
+| | `False` | Keep all features together (single weighted score) |
+| **direction** | `'difference'` | Single score = mean(pos_edges) - mean(neg_edges) (original MATLAB CPM) |
+| | `'positive'` | Positive network score only |
+| | `'negative'` | Negative network score only |
+| | *Ignored* | When `filter_by_sign=False` |
 | **selection_method** | `'all'` | Use all features |
 | | `'pvalue'` | Select features with p < α |
 | | `'top_k'` | Select the top k features by absolute correlation |
 | **selection_threshold** | `float (0, 1)` | 'pvalue' method: p-value threshold |
 | | `integer` | 'top_k' method: number of features |
-| | `N/A` | For 'all' method: ignore it |
+| | *Ignored* | For 'all' method |
 | **weighting_method** | `'binary'` | ±1 based on correlation sign |
 | | `'correlation'` | The strength of the correlation |
 | | `'squared_correlation'` | r² preserving sign |
@@ -124,7 +128,7 @@ The `missing_strategy` parameter controls what counts as missing data:
 
 
 ### 5.3 Implementing CPM (Shen et al., 2017)
-CPM uses binary weights, p-value-based feature selection, and splits features into positive and negative networks. A final linear regression maps the two network scores to the behavioral outcome.
+CPM uses binary weights, p-value-based feature selection, and splits features into positive and negative networks. A final linear regression maps the network score to the behavioral outcome.
 
 ```python
 import numpy as np
@@ -134,13 +138,13 @@ from sklearn.model_selection import cross_val_predict, cross_val_score, KFold
 cpm_pipeline = Pipeline([
     ('vectorize', FeatureVectorizer()),
     ('mua', MUA(
-        split_by_sign=True,            # Separate positive/negative networks
+        filter_by_sign=True,           # Separate positive/negative networks
+        direction='difference',        # mean(pos) - mean(neg), matches Original CPM
         selection_method='pvalue',     # p-value thresholding
         selection_threshold=0.05,      # p < 0.05
         weighting_method='binary',     # Binary weights (+1/−1)
         correlation_type='pearson',    # Pearson correlation
-        feature_aggregation='sum',     # Sum of selected features
-        standardize_scores=False
+        feature_aggregation='mean',    # Mean of selected features (scale-invariant)
     )),
     ('regressor', LinearRegression())  # Final linear regression
 ])
@@ -157,22 +161,21 @@ rmse = np.sqrt(mean_squared_error(behavior, cpm_predictions))
 r2 = r2_score(behavior, cpm_predictions)
 ```
 
-With `split_by_sign=True`, the MUA transformer outputs two columns — one for the positive network summary and one for the negative network summary. The `LinearRegression()` then fits on these two scores to predict the behavioral outcome.
+With `filter_by_sign=True` and `direction='difference'`, the MUA transformer outputs a single column representing `mean(pos_edges) - mean(neg_edges)`, matching the original MATLAB CPM implementation. The `LinearRegression()` then fits on this score to predict the behavioral outcome.
 
 
 ### 5.4 Implementing PNRS (Byington et al., 2023)
-PNRS uses regression-derived weights, includes all features, and produces a single combined score. The aggregated score is directly used as the prediction, so no downstream regressor is needed.
+PNRS uses regression-derived weights, includes all features, and produces a single combined score. 
 
 ```python
 # Build the PNRS pipeline
 pnrs_pipeline = Pipeline([
     ('vectorize', FeatureVectorizer()),
     ('mua', MUA(
-        split_by_sign=False,               # Single combined score
+        filter_by_sign=False,              # Single combined score
         selection_method='all',            # Use all features
         weighting_method='regression',     # Regression-derived weights
         feature_aggregation='sum',         # Sum of weighted features
-        standardize_scores=True            # Z-score normalization
     ))
     # No regressor 
 ])
@@ -184,9 +187,6 @@ pnrs_predictions = pnrs_scores.flatten()
 
 # Evaluation
 pnrs_r, pnrs_p = pearsonr(behavior, pnrs_predictions)
-mae = mean_absolute_error(behavior, pnrs_predictions)
-rmse = np.sqrt(mean_squared_error(behavior, pnrs_predictions))
-r2 = r2_score(behavior, pnrs_predictions)
 ```
 
 ### 5.5 Visualizing the Results
