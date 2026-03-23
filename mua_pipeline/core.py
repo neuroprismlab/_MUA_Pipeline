@@ -5,6 +5,7 @@ Author: Fatemeh Doshvargar
 """
 
 import numpy as np
+import pandas as pd
 from scipy.stats import rankdata
 from scipy import stats  
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -182,18 +183,22 @@ class FeatureVectorizer(BaseEstimator, TransformerMixin):
 
 class MUA(BaseEstimator, TransformerMixin):
     """
-    Mass Univariate Aggregation (MUA) estimator for connectivity-based predictive modeling.
+    Mass Univariate Aggregation (MUA) estimator for connectivity-based
+    predictive modeling.
 
     Parameters
     ----------
     filter_by_sign : bool, default=False
         Main control parameter:
-        - True: Split features into positive and negative networks 
-        - False: Keep all features together 
+        - True: Split features into positive and negative networks
+            (CPM-style)
+        - False: Keep all features together (single weighted score)
 
     direction : str, default='difference'
-        Only used when filter_by_sign=True. Controls how network scores are formed:
-        - 'difference': Single score = mean(pos_edges) - mean(neg_edges) (original MATLAB CPM)
+        Only used when filter_by_sign=True. Controls how network
+        scores are formed:
+        - 'difference': Single score = mean(pos_edges) - mean(neg_edges)
+            (original MATLAB CPM)
         - 'positive': Single column with positive network score only
         - 'negative': Single column with negative network score only
         Ignored when filter_by_sign=False.
@@ -216,6 +221,7 @@ class MUA(BaseEstimator, TransformerMixin):
         - 'correlation': Use correlation coefficients
         - 'squared_correlation': Use squared correlations (preserving sign)
         - 'regression': Beta weights from univariate regression
+        - 'external': Uses externally provided edge weights (e.g., CSS)
 
     correlation_type : str, default='pearson'
         Type of correlation: 'pearson' or 'spearman'
@@ -223,42 +229,80 @@ class MUA(BaseEstimator, TransformerMixin):
     feature_aggregation : str, default='mean'
         How to aggregate features:
         - 'sum': Sum of features
-        - 'mean': Mean of features (original CPM default, scale-invariant)
+        - 'mean': Mean of features (original CPM default)
 
     standardize_scores : bool, default=False
-        Whether to standardize the final aggregated scores (z-score normalization).
-        - False: Keep raw scores
-        - True: Standardize to mean=0, std=1
+        Whether to standardize the final aggregated scores.
     """
 
     def __init__(self, filter_by_sign=False, direction='difference',
                  selection_method='pvalue', selection_threshold=0.05,
-                 weighting_method='binary', correlation_type='pearson',
-                 feature_aggregation='mean', standardize_scores=False):
+                 weighting_method='binary', external_weights=None,
+                 correlation_type='pearson', feature_aggregation='mean',
+                 standardize_scores=False):
 
         self.filter_by_sign = filter_by_sign
         self.direction = direction
         self.selection_method = selection_method
         self.selection_threshold = selection_threshold
         self.weighting_method = weighting_method
+        self.external_weights = external_weights
         self.correlation_type = correlation_type
         self.feature_aggregation = feature_aggregation
         self.standardize_scores = standardize_scores
 
     def fit(self, X, y):
         n_samples, n_edges = X.shape
+        self.n_edges_ = n_edges
 
-        # Validate direction
-        if self.filter_by_sign and self.direction not in ('difference', 'positive', 'negative'):
-            raise ValueError(f"direction must be 'difference', 'positive', or 'negative', "
-                             f"got '{self.direction}'")
+        # Method validation
+        valid_selection = ['pvalue', 'top_k', 'all']
+        valid_weighting = ['binary', 'correlation', 'squared_correlation',
+                           'regression', 'external']
+        valid_corr = ['pearson', 'spearman']
+        valid_agg = ['sum', 'mean']
 
-        # Compute correlations
-        self.correlations_, self.p_values_ = self._compute_correlations(X, y)
+        if self.selection_method not in valid_selection:
+            raise ValueError(f"selection_method must be one of {valid_selection}")
+
+        if self.weighting_method not in valid_weighting:
+            raise ValueError(f"weighting_method must be one of {valid_weighting}")
+
+        if self.correlation_type not in valid_corr:
+            raise ValueError(f"correlation_type must be one of {valid_corr}")
+
+        if self.feature_aggregation not in valid_agg:
+            raise ValueError(f"feature_aggregation must be one of {valid_agg}")
+
+        # Direction validation
+        if self.filter_by_sign and self.direction not in (
+                'difference', 'positive', 'negative'):
+            raise ValueError(
+                f"direction must be 'difference', 'positive', or "
+                f"'negative', got '{self.direction}'")
+
+        # Skip correlation if external weights
+        if self.weighting_method != 'external':
+            self.correlations_, self.p_values_ = self._compute_correlations(X, y)
+        else:
+            self.correlations_ = np.zeros(n_edges)
+            self.p_values_ = np.ones(n_edges)
+
+            if self.selection_method != 'all':
+                warnings.warn(
+                    "selection_method is ignored when weighting_method='external'. "
+                    "All edges with non-zero external weights are used.",
+                    UserWarning,
+                )
 
         # Select edges
-        self.selected_edges_ = self._select_edges(n_edges)
+        if self.weighting_method == 'external':
+            self.selected_edges_ = np.ones(n_edges, dtype=bool)
+        else:
+            self.selected_edges_ = self._select_edges(n_edges)
+
         self.n_selected_edges_ = np.sum(self.selected_edges_)
+
 
         # Calculate edge weights
         self.edge_weights_ = self._calculate_edge_weights(X, y)
@@ -282,6 +326,13 @@ class MUA(BaseEstimator, TransformerMixin):
         if not hasattr(self, 'edge_weights_'):
             raise ValueError("Transformer not fitted yet. Call fit() first.")
 
+        # Shape validation
+        if X.shape[1] != self.n_edges_:
+            raise ValueError(
+                f"Input has {X.shape[1]} edges but model was fitted with "
+                f"{self.n_edges_} edges"
+            )
+
         scores = self._create_scores(X)
 
         if self.standardize_scores:
@@ -298,8 +349,10 @@ class MUA(BaseEstimator, TransformerMixin):
 
         y_mean = np.mean(y)
         y_std = np.std(y, ddof=1)
+
         if y_std == 0:
             return np.zeros(n_edges), np.ones(n_edges)
+
         y_z = (y - y_mean) / y_std
 
         X_mean = np.mean(X, axis=0)
@@ -312,13 +365,21 @@ class MUA(BaseEstimator, TransformerMixin):
 
         if np.any(valid_edges):
             X_z = np.zeros_like(X)
-            X_z[:, valid_edges] = (X[:, valid_edges] - X_mean[valid_edges]) / X_std[valid_edges]
+            X_z[:, valid_edges] = (X[:, valid_edges] -
+                                   X_mean[valid_edges]) / X_std[valid_edges]
 
-            correlations[valid_edges] = np.dot(X_z[:, valid_edges].T, y_z) / (n_samples - 1)
+            correlations[valid_edges] = (
+                np.dot(X_z[:, valid_edges].T, y_z) / (n_samples - 1)
+            )
 
             t_stats = correlations[valid_edges] * np.sqrt(
-                (n_samples - 2) / (1 - correlations[valid_edges] ** 2 + 1e-10))
-            p_values[valid_edges] = 2 * (1 - stats.t.cdf(np.abs(t_stats), n_samples - 2))
+                (n_samples - 2) /
+                (1 - correlations[valid_edges] ** 2 + 1e-10)
+            )
+
+            p_values[valid_edges] = 2 * (
+                1 - stats.t.cdf(np.abs(t_stats), n_samples - 2)
+            )
 
         return correlations, p_values
 
@@ -327,10 +388,11 @@ class MUA(BaseEstimator, TransformerMixin):
             selected_edges = self.p_values_ < self.selection_threshold
         elif self.selection_method == 'top_k':
             k = int(min(self.selection_threshold, n_edges))
-            top_k_indices = np.argpartition(np.abs(self.correlations_), -k)[-k:]
+            top_k_indices = np.argpartition(
+                np.abs(self.correlations_), -k)[-k:]
             selected_edges = np.zeros(n_edges, dtype=bool)
             selected_edges[top_k_indices] = True
-        else:  # 'all'
+        else:
             selected_edges = np.ones(n_edges, dtype=bool)
 
         return selected_edges
@@ -340,31 +402,53 @@ class MUA(BaseEstimator, TransformerMixin):
         edge_weights = np.zeros(n_edges)
 
         if self.weighting_method == 'binary':
-            edge_weights[self.selected_edges_ & (self.correlations_ > 0)] = 1.0
-            edge_weights[self.selected_edges_ & (self.correlations_ < 0)] = -1.0
+            edge_weights[self.selected_edges_
+                         & (self.correlations_ > 0)] = 1.0
+            edge_weights[self.selected_edges_
+                         & (self.correlations_ < 0)] = -1.0
 
         elif self.weighting_method == 'correlation':
-            edge_weights[self.selected_edges_] = self.correlations_[self.selected_edges_]
+            edge_weights[self.selected_edges_] = (
+                self.correlations_[self.selected_edges_]
+            )
 
         elif self.weighting_method == 'squared_correlation':
             edge_weights[self.selected_edges_] = (
-                    np.sign(self.correlations_[self.selected_edges_]) *
-                    self.correlations_[self.selected_edges_] ** 2
+                np.sign(self.correlations_[self.selected_edges_]) *
+                self.correlations_[self.selected_edges_] ** 2
             )
 
         elif self.weighting_method == 'regression':
-            selected_indices = np.where(self.selected_edges_)[0]
 
-            for idx in selected_indices:
-                brain_edge = X[:, idx]
-                XtX = np.dot(brain_edge, brain_edge)
-                Xty = np.dot(brain_edge, y)
+            selected = self.selected_edges_
+            X_sel = X[:, selected]
 
-                if XtX > 0:
-                    beta = Xty / XtX
-                    edge_weights[idx] = beta
-                else:
-                    edge_weights[idx] = 0.0
+            XtX = np.sum(X_sel * X_sel, axis=0)
+            Xty = np.dot(X_sel.T, y)
+
+            beta = np.zeros_like(XtX)
+            valid = XtX > 0
+
+            beta[valid] = Xty[valid] / XtX[valid]
+
+            edge_weights[selected] = beta
+
+        elif self.weighting_method == 'external':
+            if self.external_weights is None:
+                raise ValueError(
+                    "external_weights must be provided when "
+                    "weighting_method='external'"
+                )
+
+            external_weights = np.asarray(self.external_weights)
+
+            if external_weights.shape[0] != n_edges:
+                raise ValueError(
+                    f"external_weights length ({external_weights.shape[0]}) "
+                    f"must match number of edges ({n_edges})"
+                )
+
+            edge_weights = external_weights
 
         return edge_weights
 
@@ -375,43 +459,31 @@ class MUA(BaseEstimator, TransformerMixin):
             return self._create_combined_scores(X)
 
     def _create_split_scores(self, X):
-        """
-        Create network scores for filter-by-sign mode.
-
-        Depending on direction:
-        - 'difference':  returns (n_samples, 1) with mean(pos_edges) - mean(neg_edges)
-                         (matches original MATLAB cpm_train)
-        - 'positive':    returns (n_samples, 1) with positive network score only
-        - 'negative':    returns (n_samples, 1) with negative network score only
-        """
         n_samples = X.shape[0]
 
         pos_mask = self.pos_mask_
         neg_mask = self.neg_mask_
 
-        # Compute positive network score
         if np.any(pos_mask):
             pos_weights = np.abs(self.edge_weights_[pos_mask])
             weighted_pos = X[:, pos_mask] * pos_weights
             if self.feature_aggregation == 'sum':
                 pos_score = np.sum(weighted_pos, axis=1)
-            else:  # mean
+            else:
                 pos_score = np.mean(weighted_pos, axis=1)
         else:
             pos_score = np.zeros(n_samples)
 
-        # Compute negative network score
         if np.any(neg_mask):
             neg_weights = np.abs(self.edge_weights_[neg_mask])
             weighted_neg = X[:, neg_mask] * neg_weights
             if self.feature_aggregation == 'sum':
                 neg_score = np.sum(weighted_neg, axis=1)
-            else:  # mean
+            else:
                 neg_score = np.mean(weighted_neg, axis=1)
         else:
             neg_score = np.zeros(n_samples)
 
-        # Return based on direction
         if self.direction == 'difference':
             scores = (pos_score - neg_score).reshape(-1, 1)
         elif self.direction == 'positive':
@@ -427,14 +499,14 @@ class MUA(BaseEstimator, TransformerMixin):
 
         scores = np.zeros((n_samples, 1))
 
-        if len(selected_indices) > 0:
+        if selected_indices.size > 0:
             selected_weights = self.edge_weights_[selected_indices]
             selected_edges = X[:, selected_indices]
             weighted_edges = selected_edges * selected_weights
 
             if self.feature_aggregation == 'sum':
                 scores[:, 0] = np.sum(weighted_edges, axis=1)
-            else:  # mean
+            else:
                 scores[:, 0] = np.mean(weighted_edges, axis=1)
 
         return scores
