@@ -10,6 +10,7 @@ from scipy.stats import rankdata
 from scipy import stats  
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import StandardScaler  
+from typing import Optional
 import warnings
 
 class FeatureVectorizer(BaseEstimator, TransformerMixin):
@@ -231,11 +232,13 @@ class MUA(BaseEstimator, TransformerMixin):
         Whether to standardize the final aggregated scores.
     """
 
-    def __init__(self, filter_by_sign=False, direction='difference',
-                 selection_method='pvalue', selection_threshold=0.05,
-                 weighting_method='binary', external_weights=None,
-                 correlation_type='pearson', feature_aggregation='mean',
-                 standardize_scores=False):
+
+    def __init__(self, filter_by_sign: bool = False, direction: str = 'difference',
+                 selection_method: str = 'pvalue', selection_threshold: float = 0.05,
+                 weighting_method: str = 'binary',
+                 external_weights: Optional[np.ndarray] = None,
+                 correlation_type: str = 'pearson', feature_aggregation: str = 'mean',
+                 standardize_scores: bool = False):
 
         self.filter_by_sign = filter_by_sign
         self.direction = direction
