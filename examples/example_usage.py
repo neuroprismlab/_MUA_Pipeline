@@ -77,10 +77,10 @@ if __name__ == "__main__":
         functional_connectivity_matrices, behavioral_measures)
 
     # Use scores directly as predictions
-    PNRS = pnrs_scores.flatten()
+    pnrs = pnrs_scores.flatten()
 
     # Evaluation
-    pnrs_r, pnrs_p = pearsonr(behavioral_measures, PNRS)
+    pnrs_r, pnrs_p = pearsonr(behavioral_measures, pnrs)
     print(f"Correlation: r={pnrs_r:.3f}, p={pnrs_p:.2e}")
 
     # PCS 
@@ -90,9 +90,9 @@ if __name__ == "__main__":
     css_path = 'your_CSS.csv'
     css_matrix = pd.read_csv(css_path, index_col=0).values
 
-    # Extract upper triangle to get a 1D weight vector
+    # Extract upper triangle 
     upper_tri_indices = np.triu_indices(css_matrix.shape[0], k=1)
-    css_weights = css_matrix[np.triu_indices(n_nodes, k=1)]
+    css_weights = css_matrix[upper_tri_indices]
     
     pcs_pipeline = Pipeline([
         ('vectorize', FeatureVectorizer()),
@@ -109,13 +109,13 @@ if __name__ == "__main__":
         functional_connectivity_matrices, behavioral_measures)
 
     # Use scores directly as predictions
-    PCS = pcs_scores.flatten()
+    pcs = pcs_scores.flatten()
 
     # Evaluation
-    pcs_r, pcs_p = pearsonr(behavioral_measures, PCS)
+    pcs_r, pcs_p = pearsonr(behavioral_measures, pcs)
     print(f"Correlation: r={pcs_r:.3f}, p={pcs_p:.2e}")
 
     # Plot results
     plot_results(cpm_predictions, behavioral_measures, title="CPM")
-    plot_results(pnrs_predictions, behavioral_measures, title="PNRS")
-    plot_results(pcs_predictions, behavioral_measures, title="PCS")
+    plot_results(pnrs, behavioral_measures, title="PNRS")
+    plot_results(pcs, behavioral_measures, title="PCS")
