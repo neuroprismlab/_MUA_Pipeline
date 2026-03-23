@@ -10,9 +10,8 @@ from scipy.stats import rankdata
 from scipy import stats  
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import StandardScaler  
+import warnings
 
-
-# feature vectorizer
 class FeatureVectorizer(BaseEstimator, TransformerMixin):
     """
     Transform connectivity matrices to feature vectors.
@@ -180,7 +179,6 @@ class FeatureVectorizer(BaseEstimator, TransformerMixin):
 
             return X
 
-
 class MUA(BaseEstimator, TransformerMixin):
     """
     Mass Univariate Aggregation (MUA) estimator for connectivity-based
@@ -191,14 +189,12 @@ class MUA(BaseEstimator, TransformerMixin):
     filter_by_sign : bool, default=False
         Main control parameter:
         - True: Split features into positive and negative networks
-            (CPM-style)
-        - False: Keep all features together (single weighted score)
+        - False: Keep all features together 
 
     direction : str, default='difference'
         Only used when filter_by_sign=True. Controls how network
         scores are formed:
-        - 'difference': Single score = mean(pos_edges) - mean(neg_edges)
-            (original MATLAB CPM)
+        - 'difference': Single score = (pos_edges) - (neg_edges)
         - 'positive': Single column with positive network score only
         - 'negative': Single column with negative network score only
         Ignored when filter_by_sign=False.
