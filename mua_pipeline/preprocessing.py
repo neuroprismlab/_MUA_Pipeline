@@ -65,11 +65,11 @@ def preprocess(connectivity_matrix, behavioral_data,
             behavioral_true_format = behavioral_data.T
             n_subjects_behavioral = behavioral_data.shape[1]
             if verbose:
-                print("Behavioral data transposed from ",
-                      f"{behavioral_data.shape} to ",
+                print(f"Behavioral data transposed from "
+                      f"{behavioral_data.shape} to "
                       f"{behavioral_true_format.shape}")
     else:
-        raise ValueError("Behavioral data must be 1D or 2D, ",
+        raise ValueError(f"Behavioral data must be 1D or 2D, "
                          f"got {behavioral_data.ndim}D")
 
     # Convert connectivity_matrix to standard format
@@ -82,8 +82,8 @@ def preprocess(connectivity_matrix, behavioral_data,
             connectivity_true_format = connectivity_matrix.T
             n_subjects_connectivity = connectivity_matrix.shape[1]
             if verbose:
-                print("Connectivity matrix transposed from ",
-                      f"{connectivity_matrix.shape} to ",
+                print(f"Connectivity matrix transposed from "
+                      f"{connectivity_matrix.shape} to "
                       f"{connectivity_true_format.shape}")
         else:
             if connectivity_matrix.shape[0] >= connectivity_matrix.shape[1]:
@@ -126,12 +126,12 @@ def preprocess(connectivity_matrix, behavioral_data,
                 n_subjects_connectivity = shape[0]
 
     else:
-        raise ValueError("Connectivity matrix must be 2D or 3D, got",
-                         f" {connectivity_matrix.ndim}D")
+        raise ValueError(f"Connectivity matrix must be 2D or 3D, "
+                         f"got {connectivity_matrix.ndim}D")
 
     # Verify subject counts match
     if n_subjects_connectivity != n_subjects_behavioral:
-        raise ValueError("Subject count mismatch: connectivity has ",
+        raise ValueError(f"Subject count mismatch: connectivity has "
                          f"{n_subjects_connectivity} subjects, "
                          f"behavioral has {n_subjects_behavioral} subjects")
 
@@ -143,9 +143,9 @@ def preprocess(connectivity_matrix, behavioral_data,
     elif missing_strategy == 'inf':
         missing_mask = np.isinf(behavioral_true_format)
     elif missing_strategy == 'any':
-        missing_mask = (behavioral_true_format == 0) | (
-            np.isnan(behavioral_true_format)) | (
-                np.isinf(behavioral_true_format))
+        missing_mask = ((behavioral_true_format == 0) |
+                        np.isnan(behavioral_true_format) |
+                        np.isinf(behavioral_true_format))
     else:
         raise ValueError(f"Unknown missing_strategy: {missing_strategy}")
 
@@ -171,14 +171,15 @@ def preprocess(connectivity_matrix, behavioral_data,
         clean_behavioral = clean_behavioral.squeeze()
 
     if verbose:
+        n_final = (len(clean_behavioral) if clean_behavioral.ndim == 1
+                   else clean_behavioral.shape[0])
         print(f"Missing data removal ({missing_strategy} strategy):")
         print(f"  Original subjects: {n_subjects_behavioral}")
         print(f"  Removed subjects: {len(removed_indices)}")
-        print("  Final subjects: ",
-              f"{len(clean_behavioral) if (clean_behavioral.ndim == 1) else clean_behavioral.shape[0]}")
-        print("  Connectivity shape: ",
+        print(f"  Final subjects: {n_final}")
+        print(f"  Connectivity shape: "
               f"{original_connectivity_shape} → {clean_connectivity.shape}")
-        print("  Behavioral shape: ",
+        print(f"  Behavioral shape: "
               f"{original_behavioral_shape} → {clean_behavioral.shape}")
 
     return clean_connectivity, clean_behavioral, removed_indices
