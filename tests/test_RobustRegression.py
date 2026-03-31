@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from sklearn.utils.estimator_checks import parametrize_with_checks
+import statsmodels.api as sm
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
