@@ -11,7 +11,7 @@ from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 from sklearn.pipeline import Pipeline
 
 # Import the custom modules
-from mua_pipeline import FeatureVectorizer, MUA, plot_results
+from mua_pipeline import FeatureVectorizer, MUA, RobustRegression, plot_results
 
 
 if __name__ == "__main__":
@@ -22,8 +22,8 @@ if __name__ == "__main__":
     behavioral_measures = 'your_behavioral_data'
     cv = 10
 
-    # CPM
-    print("Original CPM")
+    # CPM with linear regression
+    print("CPM - final step: linear regression")
 
     cpm_pipeline = Pipeline([
         ('vectorize', FeatureVectorizer()),
@@ -60,6 +60,44 @@ if __name__ == "__main__":
     print(f"MAE: {mae:.3f}")
     print(f"RMSE: {rmse:.3f}")
 
+    # CPM with robust regression
+    print("CPM - final step: robust regression")
+
+    cpm_pipeline_1 = Pipeline([
+        ('vectorize', FeatureVectorizer()),
+        ('mua', MUA(
+            filter_by_sign=True,
+            direction='difference',
+            selection_method='pvalue',
+            selection_threshold=0.05,
+            weighting_method='binary',
+            feature_aggregation='mean',
+        )),
+        ('regressor', RobustRegression())
+    ])
+
+    # Cross-validation
+    cpm_scores_1 = cross_val_score(
+        cpm_pipeline_1, functional_connectivity_matrices,
+        behavioral_measures, cv=cv)
+    cpm_predictions_1 = cross_val_predict(
+        cpm_pipeline_1, functional_connectivity_matrices,
+        behavioral_measures, cv=cv)
+
+    print(f"CPM R² ({cv}-fold CV): "
+          f"{cpm_scores_1.mean():.3f} ± {cpm_scores_1.std():.3f}")
+
+    # Evaluation
+    cpm_r_1, cpm_p_1 = pearsonr(behavioral_measures, cpm_predictions_1)
+    mae_1 = mean_absolute_error(behavioral_measures, cpm_predictions_1)
+    rmse_1 = np.sqrt(mean_squared_error(behavioral_measures, cpm_predictions_1))
+    r2_1 = r2_score(behavioral_measures, cpm_predictions_1)
+
+    print(f"Correlation: r={cpm_r_1:.3f}, p={cpm_p_1:.2e}")
+    print(f"R²: {r2_1:.3f}")
+    print(f"MAE: {mae_1:.3f}")
+    print(f"RMSE: {rmse_1:.3f}")
+    
     # PNRS
     print("PNRS")
 
