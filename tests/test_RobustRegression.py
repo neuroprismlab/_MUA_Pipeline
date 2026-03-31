@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import statsmodels.api as sm
 from sklearn.utils.estimator_checks import parametrize_with_checks
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
