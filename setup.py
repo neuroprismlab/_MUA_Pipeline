@@ -28,5 +28,6 @@ setup(
         "matplotlib>=3.3.0",
         "seaborn>=0.11.0",
         "pandas>=1.1.0",
+        statsmodels>=0.13.0,
     ],
 )
