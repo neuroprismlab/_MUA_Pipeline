@@ -1,3 +1,7 @@
+import numpy as np
+import statsmodels.api as sm
+from sklearn.base import BaseEstimator, RegressorMixin
+
 class RobustRegression(BaseEstimator, RegressorMixin):
     def fit(self, X, y):
         X_const = sm.add_constant(np.array(X))
