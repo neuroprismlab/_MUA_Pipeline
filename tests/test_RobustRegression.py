@@ -1,6 +1,10 @@
+# tests/test_RobustRegression.py
+"""
+Tests for RobustRegression model
+"""
 import numpy as np
 import pytest
-from sklearn.utils.estimator_checks import parametrize_with_checks
+import statsmodels.api as sm
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
@@ -21,7 +25,6 @@ def data_with_outliers():
     np.random.seed(42)
     X = np.random.randn(100, 3)
     y = 2 * X[:, 0] - 1.5 * X[:, 1] + 0.5 * X[:, 2] + np.random.randn(100) * 0.5
-    # Inject outliers
     y[0] = 100
     y[1] = -100
     y[2] = 50
@@ -52,8 +55,6 @@ class TestRobustRegression:
     def test_outlier_robustness(self, data_with_outliers):
         X, y = data_with_outliers
         model = RobustRegression().fit(X, y)
-        # True coefficients are [2, -1.5, 0.5]
-        # Intercept is at index 0, slopes at 1:
         coefs = model.model_.params[1:]
         assert abs(coefs[0] - 2.0) < 0.5, f"Expected ~2.0, got {coefs[0]:.3f}"
         assert abs(coefs[1] + 1.5) < 0.5, f"Expected ~-1.5, got {coefs[1]:.3f}"
@@ -89,7 +90,6 @@ class TestRobustRegression:
         model = RobustRegression().fit(X, y)
         assert hasattr(model, 'model_')
         assert model.model_.params is not None
-        # 3 features + 1 intercept = 4 params
         assert len(model.model_.params) == 4
 
     def test_predict_before_fit_raises(self):
