@@ -96,4 +96,4 @@ class TestRobustRegression:
     def test_tukey_biweight_used(self, sample_data):
         X, y = sample_data
         model = RobustRegression().fit(X, y)
-        assert isinstance(model.model_.M, sm.robust.norms.TukeyBiweight)
+        assert isinstance(model.model_.model.M, sm.robust.norms.TukeyBiweight)
