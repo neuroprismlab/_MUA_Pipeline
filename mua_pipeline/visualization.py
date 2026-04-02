@@ -17,7 +17,6 @@ def plot_results(predictions, actual, title=None):
         return
 
     plt.rcParams.update({
-        'font.family': 'Arial',
         'font.size': 11,
         'axes.linewidth': 0.9,
         'xtick.major.width': 0.9,
@@ -43,7 +42,7 @@ def plot_results(predictions, actual, title=None):
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1])
 
-    # ── Scatter ──────────────────────────────────────────────────────────
+    # Scatter
     ax1.scatter(actual, predictions, alpha=0.6, s=22,
                 edgecolors='k', linewidth=0.3,
                 color='#4472C4', zorder=3)
@@ -70,7 +69,7 @@ def plot_results(predictions, actual, title=None):
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
 
-    # ── Histogram ────────────────────────────────────────────────────────
+    # Histogram
     errors = predictions - actual
 
     bins = np.linspace(errors.min() - 0.5, errors.max() + 0.5, 25)
@@ -99,7 +98,7 @@ def plot_results(predictions, actual, title=None):
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
 
-    # ── Panel letters ────────────────────────────────────────────────────
+    # Panel letters
     fig.canvas.draw()
 
     for ax, label in zip([ax1, ax2], ['A', 'B']):
@@ -109,7 +108,7 @@ def plot_results(predictions, actual, title=None):
                  va='bottom', ha='left',
                  transform=fig.transFigure)
 
-    # ── Suptitle ─────────────────────────────────────────────────────────
+    # Suptitle 
     if title:
         fig.text(0.5, 0.97, title,
                  fontsize=13, fontweight='bold',
