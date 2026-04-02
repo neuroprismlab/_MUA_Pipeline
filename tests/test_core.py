@@ -336,7 +336,7 @@ class TestMUA:
         mua = MUA(weighting_method='external', external_weights=ext_weights,
                   selection_method='pvalue')
 
-        with pytest.warns(UserWarning, match="selection_method is ignored"):
+        with pytest.warns(UserWarning, match="selection_method and selection_threshold are ignored"):
             mua.fit(X, y)
 
     def test_external_weights_no_warn_selection_all(self, sample_data):
