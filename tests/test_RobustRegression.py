@@ -97,3 +97,4 @@ class TestRobustRegression:
         X, y = sample_data
         model = RobustRegression().fit(X, y)
         assert isinstance(model.model_.model.M, sm.robust.norms.TukeyBiweight)
+        
