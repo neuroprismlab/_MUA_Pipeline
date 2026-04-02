@@ -5,12 +5,12 @@ Author: Fatemeh Doshvargar
 """
 
 import numpy as np
-import pandas as pd
 from scipy.stats import rankdata
-from scipy import stats  
+from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import StandardScaler  
-from typing import Optional
+from sklearn.preprocessing import StandardScaler
+from typing import Optional, Union
+from numpy.typing import ArrayLike
 import warnings
 
 class FeatureVectorizer(BaseEstimator, TransformerMixin):
@@ -128,8 +128,8 @@ class FeatureVectorizer(BaseEstimator, TransformerMixin):
 
             if X.shape[1] != self.n_regions_ or X.shape[2] != self.n_regions_:
                 raise ValueError(
-                    "Expected matrices of shape ",
-                    "({self.n_regions_}, {self.n_regions_}), "
+                    f"Expected matrices of shape "
+                    f"({self.n_regions_}, {self.n_regions_}), "
                     f"got ({X.shape[1]}, {X.shape[2]})")
 
             # Extract upper triangular elements
@@ -138,10 +138,6 @@ class FeatureVectorizer(BaseEstimator, TransformerMixin):
                 X_transformed[i, :] = X[i][self.upper_tri_indices_]
 
             return X_transformed
-
-    def fit_transform(self, X, y=None):
-        """Fit and transform in one step."""
-        return self.fit(X, y).transform(X)
 
     def inverse_transform(self, X_transformed):
         """
@@ -190,14 +186,15 @@ class MUA(BaseEstimator, TransformerMixin):
     filter_by_sign : bool, default=False
         Main control parameter:
         - True: Split features into positive and negative networks
-        - False: Keep all features together 
+        - False: Keep all features together
 
-    direction : str, default='difference'
+    direction : str or None, default=None
         Only used when filter_by_sign=True. Controls how network
         scores are formed:
         - 'difference': Single score = (pos_edges) - (neg_edges)
         - 'positive': Single column with positive network score only
         - 'negative': Single column with negative network score only
+        Defaults to 'difference' if not specified.
         Ignored when filter_by_sign=False.
 
     selection_method : str, default='pvalue'
@@ -233,10 +230,10 @@ class MUA(BaseEstimator, TransformerMixin):
     """
 
 
-    def __init__(self, filter_by_sign: bool = False, direction: str = 'difference',
-                 selection_method: str = 'pvalue', selection_threshold: float = 0.05,
+    def __init__(self, filter_by_sign: bool = False, direction: Optional[str] = None,
+                 selection_method: str = 'pvalue', selection_threshold: Union[float, int] = 0.05,
                  weighting_method: str = 'binary',
-                 external_weights: Optional[np.ndarray] = None,
+                 external_weights: Optional[ArrayLike] = None,
                  correlation_type: str = 'pearson', feature_aggregation: str = 'mean',
                  standardize_scores: bool = False):
 
@@ -260,6 +257,7 @@ class MUA(BaseEstimator, TransformerMixin):
                            'regression', 'external']
         valid_corr = ['pearson', 'spearman']
         valid_agg = ['sum', 'mean']
+        valid_direction = ['difference', 'positive', 'negative']
 
         if self.selection_method not in valid_selection:
             raise ValueError(f"selection_method must be one of {valid_selection}")
@@ -273,12 +271,22 @@ class MUA(BaseEstimator, TransformerMixin):
         if self.feature_aggregation not in valid_agg:
             raise ValueError(f"feature_aggregation must be one of {valid_agg}")
 
-        # Direction validation
-        if self.filter_by_sign and self.direction not in (
-                'difference', 'positive', 'negative'):
+        # Resolve direction default
+        direction = self.direction if self.direction is not None else 'difference'
+
+        if direction not in valid_direction:
             raise ValueError(
-                f"direction must be 'difference', 'positive', or "
-                f"'negative', got '{self.direction}'")
+                f"direction must be one of {valid_direction}, "
+                f"got '{direction}'")
+
+        if not self.filter_by_sign and self.direction is not None:
+            warnings.warn(
+                "direction is ignored when filter_by_sign=False. "
+                "All features will be combined into a single score.",
+                UserWarning,
+            )
+
+        self.direction_ = direction
 
         # Skip correlation if external weights
         if self.weighting_method != 'external':
@@ -289,8 +297,9 @@ class MUA(BaseEstimator, TransformerMixin):
 
             if self.selection_method != 'all':
                 warnings.warn(
-                    "selection_method is ignored when weighting_method='external'. "
-                    "All edges with non-zero external weights are used.",
+                    "selection_method and selection_threshold are ignored when "
+                    "weighting_method='external'. All edges with non-zero "
+                    "external weights are used.",
                     UserWarning,
                 )
 
@@ -371,9 +380,11 @@ class MUA(BaseEstimator, TransformerMixin):
                 np.dot(X_z[:, valid_edges].T, y_z) / (n_samples - 1)
             )
 
+            denom = np.clip(
+                1 - correlations[valid_edges] ** 2, 1e-10, None
+            )
             t_stats = correlations[valid_edges] * np.sqrt(
-                (n_samples - 2) /
-                (1 - correlations[valid_edges] ** 2 + 1e-10)
+                (n_samples - 2) / denom
             )
 
             p_values[valid_edges] = 2 * (
@@ -458,6 +469,14 @@ class MUA(BaseEstimator, TransformerMixin):
             return self._create_combined_scores(X)
 
     def _create_split_scores(self, X):
+        """
+        Create separate positive and negative network scores.
+
+        Note: np.abs(weights) is used here because features have already
+        been split by sign into pos_mask_ and neg_mask_. The absolute
+        value ensures we weight by magnitude only, since the sign
+        information is already captured by the mask separation.
+        """
         n_samples = X.shape[0]
 
         pos_mask = self.pos_mask_
@@ -483,11 +502,11 @@ class MUA(BaseEstimator, TransformerMixin):
         else:
             neg_score = np.zeros(n_samples)
 
-        if self.direction == 'difference':
+        if self.direction_ == 'difference':
             scores = (pos_score - neg_score).reshape(-1, 1)
-        elif self.direction == 'positive':
+        elif self.direction_ == 'positive':
             scores = pos_score.reshape(-1, 1)
-        elif self.direction == 'negative':
+        elif self.direction_ == 'negative':
             scores = neg_score.reshape(-1, 1)
 
         return scores
